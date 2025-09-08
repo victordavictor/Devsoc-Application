@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Random Wheel Spinner</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+
+    <!-- Spinner -->
+    <div class="spinner-area">
+
+      <!-- Pointer -->
+      <div class="pointer" aria-hidden="true">
+        <div class="arrow"></div>
+      </div>
+
+      <!-- Wheel -->
+      <div id="wheel" class="wheel" role="img" aria-label="Prize wheel">
+        <!-- Labels placed with CSS at each quadrant -->
+        <div class="label label-top-left">Win</div>
+        <div class="label label-top-right">Mega Win</div>
+        <div class="label label-bottom-left">Lose</div>
+        <div class="label label-bottom-right">Mega Lose</div>
+      </div>
+
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button id="spinBtn" class="btn">Spin</button>
+      <div id="result" class="result" aria-live="polite"></div>
+    </div>
+
+  </main>
+
+  <script>
+    // sector definitions: label and center angle (degrees, 0 = top, clockwise)
+    const sectors = [
+      { name: 'Mega Win', center: 45 },
+      { name: 'Mega Lose', center: 135 },
+      { name: 'Lose', center: 225 },
+      { name: 'Win', center: 315 }
+    ];
+
+    const wheel = document.getElementById('wheel');
+    const spinBtn = document.getElementById('spinBtn');
+    const result = document.getElementById('result');
+
+    let isSpinning = false;
+    let currentRotation = 0; // keep track of the wheel's current rotation (deg)
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    spinBtn.addEventListener('click', () => {
+      if (isSpinning) {
+        return;
+      }
+
+      isSpinning = true;
+      spinBtn.disabled = true;
+      result.textContent = '';
+
+      // Choose random sector (0..3)
+      const chosenIndex = randomInt(0, sectors.length - 1);
+      const sector = sectors[chosenIndex];
+
+      // Choose number of full spins and a small random offset inside the sector for realism
+      const fullSpins = randomInt(3, 6);
+      const sectorHalf = 90 / 2; // quadrant width half
+      const safeOffset = 20; // degrees max offset from exact center to stay well within sector
+      const extraOffset = (Math.random() * (safeOffset * 2)) - safeOffset; // [-safeOffset, safeOffset]
+
+      // Calculate final rotation so that sector.center + finalRotation ≡ 270deg (pointer at left)
+      // => finalRotation ≡ 270 - sector.center (mod 360)
+      const alignAngle = (270 - sector.center + 360) % 360;
+      const targetRotation = fullSpins * 360 + alignAngle + extraOffset;
+
+      // Set up transition duration proportional to spins (but within limits)
+      const duration = Math.min(6.5, 2.8 + fullSpins * 0.9); // seconds
+
+      // apply CSS transition
+      wheel.style.transition = `transform ${duration}s cubic-bezier(.12,.84,.18,1)`;
+      currentRotation += targetRotation;
+      wheel.style.transform = `rotate(${currentRotation}deg)`;
+
+      // When transition finishes, display result, re-enable button
+      const onTransitionEnd = () => {
+        wheel.style.transition = ''; // remove transition to allow instant adjustments later
+        // normalize currentRotation to [0, 360)
+        currentRotation = ((currentRotation % 360) + 360) % 360;
+        isSpinning = false;
+        spinBtn.disabled = false;
+
+        // determine which sector is under pointer (pointer at 270°)
+        // find sector for which (sector.center + currentRotation) mod 360 is close to 270
+        // We'll compute the difference and find the smallest.
+        let chosen = null;
+        let bestDiff = 1e9;
+        const pointerAngle = 270;
+        sectors.forEach(s => {
+          let angle = (s.center + currentRotation) % 360;
+          let diff = Math.abs(((angle - pointerAngle + 540) % 360) - 180); // wrapped distance
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            chosen = s;
+          }
+        });
+
+        result.textContent = `Result: ${chosen.name}`;
+        wheel.removeEventListener('transitionend', onTransitionEnd);
+      };
+
+      wheel.addEventListener('transitionend', onTransitionEnd);
+    });
+
+    // allow keyboard activation
+    spinBtn.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') spinBtn.click();
+    });
+  </script>
+</body>
+</html>
